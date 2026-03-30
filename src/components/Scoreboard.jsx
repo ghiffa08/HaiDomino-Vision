@@ -49,8 +49,18 @@ const Scoreboard = ({ gameState, addPlayer, removePlayer, updateName, resetScore
                  </div>
               )}
 
+              {/* Score History */}
+              <div className="flex-1 w-full overflow-y-auto mb-4 flex flex-col items-center gap-2 font-mono text-lg text-slate-300">
+                {player.history?.map((pts, i) => (
+                    <div key={i} className="flex gap-3 items-center border-b border-white/5 w-24 justify-center pb-1">
+                        <span className="text-slate-600 text-xs">{i+1}.</span>
+                        <span>{pts}</span>
+                    </div>
+                ))}
+              </div>
+
               {/* Add Button */}
-              <button 
+              <button  
                 onClick={() => onAddScore(player.id)}
                 className={`w-20 h-20 rounded-full flex items-center justify-center text-white ${theme.bg} hover:brightness-110 active:scale-95 transition-all shadow-xl mt-auto mb-6`}
                 style={{boxShadow: `0 10px 25px -5px ${theme.bg.replace('bg-', '')}`}}

@@ -4,8 +4,8 @@ const STORAGE_KEY = 'domino_game_state';
 
 const defaultState = {
   players: [
-    { id: '1', name: 'Player 1', score: 0 },
-    { id: '2', name: 'Player 2', score: 0 }
+    { id: '1', name: 'Player 1', score: 0, history: [] },
+    { id: '2', name: 'Player 2', score: 0, history: [] }
   ]
 };
 
@@ -30,7 +30,7 @@ export const useGameState = () => {
       ...prev,
       players: [
         ...prev.players,
-        { id: Date.now().toString(), name: `Player ${prev.players.length + 1}`, score: 0 }
+        { id: Date.now().toString(), name: `Player ${prev.players.length + 1}`, score: 0, history: [] }
       ]
     }));
   };
@@ -46,7 +46,11 @@ export const useGameState = () => {
   const addScore = (id, points) => {
     setGameState(prev => ({
       ...prev,
-      players: prev.players.map(p => p.id === id ? { ...p, score: p.score + points } : p)
+      players: prev.players.map(p => p.id === id ? { 
+          ...p, 
+          score: p.score + points,
+          history: [...(p.history || []), points]
+      } : p)
     }));
   };
 
@@ -60,7 +64,7 @@ export const useGameState = () => {
   const resetScores = () => {
     setGameState(prev => ({
       ...prev,
-      players: prev.players.map(p => ({ ...p, score: 0 }))
+      players: prev.players.map(p => ({ ...p, score: 0, history: [] }))
     }));
   };
 
