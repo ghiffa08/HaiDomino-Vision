@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 
 export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDetected }) => {
   const requestRef = useRef();
+  const lastUpdateRef = useRef(0);
   
   const processFrame = useCallback(() => {
     // Always loop
@@ -42,15 +43,72 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
       
       // Blur to reduce noise
       const blurred = new window.cv.Mat();
-      window.cv.GaussianBlur(gray, blurred, new window.cv.Size(7, 7), 0, 0, window.cv.BORDER_DEFAULT);
+      window.cv.GaussianBlur(gray, blurred, new window.cv.Size(11, 11), 0, 0, window.cv.BORDER_DEFAULT);
 
-      // Canny edge detection instead of adaptive threshold for better handling of lighting and gradients
+      // Canny edge detection with relaxed thresholds for better handling of lighting and motion blur
       const edges = new window.cv.Mat();
-      window.cv.Canny(blurred, edges, 50, 150, 3, false);
+      window.cv.Canny(blurred, edges, 30, 100, 3, false);
       
       // Dilate edges to connect broken segment loops
       const M_dilate = window.cv.getStructuringElement(window.cv.MORPH_RECT, new window.cv.Size(3, 3));
       window.cv.dilate(edges, edges, M_dilate, new window.cv.Point(-1, -1), 1, window.cv.BORDER_CONSTANT, window.cv.morphologyDefaultBorderValue());
+
+      // Define static structure for pip counting outside loop for performance
+      const countPips = (region) => {
+         const hsv = new window.cv.Mat();
+         window.cv.cvtColor(region, hsv, window.cv.COLOR_RGBA2RGB);
+         window.cv.cvtColor(hsv, hsv, window.cv.COLOR_RGB2HSV);
+
+         // Look for Red Color Pips (HSV wraparound in OpenCV 0-10 & 165-180)
+         const mask1 = new window.cv.Mat();
+         const mask2 = new window.cv.Mat();
+         const mask = new window.cv.Mat();
+
+         const lowerRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [0, 90, 70, 0]);
+         const upperRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [15, 255, 255, 0]);
+         window.cv.inRange(hsv, lowerRed1, upperRed1, mask1);
+
+         const lowerRed2 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [165, 90, 70, 0]);
+         const upperRed2 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180, 255, 255, 0]);
+         window.cv.inRange(hsv, lowerRed2, upperRed2, mask2);
+
+         window.cv.bitwise_or(mask1, mask2, mask);
+
+         // Clean up the mask holes
+         const M_morph = window.cv.getStructuringElement(window.cv.MORPH_ELLIPSE, new window.cv.Size(3, 3));
+         window.cv.morphologyEx(mask, mask, window.cv.MORPH_OPEN, M_morph);
+         window.cv.morphologyEx(mask, mask, window.cv.MORPH_CLOSE, M_morph);
+
+         const pipContours = new window.cv.MatVector();
+         const pipHierarchy = new window.cv.Mat();
+         window.cv.findContours(mask, pipContours, pipHierarchy, window.cv.RETR_EXTERNAL, window.cv.CHAIN_APPROX_SIMPLE);
+
+         let pipCount = 0;
+         
+         for (let j = 0; j < pipContours.size(); ++j) {
+            const pipCnt = pipContours.get(j);
+            const pipArea = window.cv.contourArea(pipCnt);
+            
+            // Relax constraints to account for motion blur
+            if (pipArea > 10 && pipArea < 3500) {
+                const perimeter = window.cv.arcLength(pipCnt, true);
+                if (perimeter > 0) {
+                    const circularity = 4 * Math.PI * (pipArea / (perimeter * perimeter));
+                    if (circularity > 0.3) {
+                        pipCount++;
+                    }
+                } else {
+                    // Small points might not have significant perimeter but still be valid pip centers
+                    pipCount++;
+                }
+            }
+            pipCnt.delete();
+         }
+
+         hsv.delete(); mask1.delete(); mask2.delete(); mask.delete(); lowerRed1.delete(); upperRed1.delete(); lowerRed2.delete(); upperRed2.delete(); M_morph.delete(); pipContours.delete(); pipHierarchy.delete();
+         
+         return Math.min(pipCount, 12);
+      };
 
       // Find contours
       const contours = new window.cv.MatVector();
@@ -63,17 +121,17 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
         const cnt = contours.get(i);
         const area = window.cv.contourArea(cnt);
         
-        // Optimize: Domino must be reasonably large compared to frame
-        if (area > 5000 && area < (width * height) / 2) {
+        // Optimize: Domino must be reasonably large compared to frame, relaxed for distance/blur
+        if (area > 2000 && area < (width * height) / 2) {
             // Find minimum area bounding rectangle
             const rotatedRect = window.cv.minAreaRect(cnt);
             const w = rotatedRect.size.width;
             const h = rotatedRect.size.height;
             
-            // Check aspect ratio of standard dominoes (approx 1:2 or 2:1)
+            // Check aspect ratio of standard dominoes (approx 1:2 or 2:1), relaxed for perspective variance
             let aspectRatio = Math.max(w, h) / Math.min(w, h); // always >= 1
             
-            if (aspectRatio > 1.4 && aspectRatio < 2.6) {
+            if (aspectRatio > 1.2 && aspectRatio < 3.0) {
                 const box = window.cv.rotatedRectPoints(rotatedRect);
                 
                 // Draw rotated bounding box Outline
@@ -137,59 +195,6 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
                     const topHalf = warped.roi(topRect);
                     const bottomHalf = warped.roi(bottomRect);
 
-                    const countPips = (region) => {
-                       const hsv = new window.cv.Mat();
-                       window.cv.cvtColor(region, hsv, window.cv.COLOR_RGBA2RGB);
-                       window.cv.cvtColor(hsv, hsv, window.cv.COLOR_RGB2HSV);
-
-                       // Look for Red Color Pips (HSV wraparound in OpenCV 0-10 & 165-180)
-                       const mask1 = new window.cv.Mat();
-                       const mask2 = new window.cv.Mat();
-                       const mask = new window.cv.Mat();
-
-                       const lowerRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [0, 90, 70, 0]);
-                       const upperRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [15, 255, 255, 0]);
-                       window.cv.inRange(hsv, lowerRed1, upperRed1, mask1);
-
-                       const lowerRed2 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [165, 90, 70, 0]);
-                       const upperRed2 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180, 255, 255, 0]);
-                       window.cv.inRange(hsv, lowerRed2, upperRed2, mask2);
-
-                       window.cv.bitwise_or(mask1, mask2, mask);
-
-                       // Clean up the mask holes
-                       const M_morph = window.cv.getStructuringElement(window.cv.MORPH_ELLIPSE, new window.cv.Size(3, 3));
-                       window.cv.morphologyEx(mask, mask, window.cv.MORPH_OPEN, M_morph);
-                       window.cv.morphologyEx(mask, mask, window.cv.MORPH_CLOSE, M_morph);
-
-                       const pipContours = new window.cv.MatVector();
-                       const pipHierarchy = new window.cv.Mat();
-                       window.cv.findContours(mask, pipContours, pipHierarchy, window.cv.RETR_EXTERNAL, window.cv.CHAIN_APPROX_SIMPLE);
-
-                       let pipCount = 0;
-                       
-                       for (let j = 0; j < pipContours.size(); ++j) {
-                          const pipCnt = pipContours.get(j);
-                          const pipArea = window.cv.contourArea(pipCnt);
-                          
-                          // Because image is 100x100, valid red pip circles have predictable sizes
-                          if (pipArea > 15 && pipArea < 3500) {
-                              // We can also check circularity here for extreme robustness
-                              const perimeter = window.cv.arcLength(pipCnt, true);
-                              const circularity = 4 * Math.PI * (pipArea / (perimeter * perimeter));
-                              
-                              if (circularity > 0.4) {
-                                  pipCount++;
-                              }
-                          }
-                          pipCnt.delete();
-                       }
-
-                       hsv.delete(); mask1.delete(); mask2.delete(); mask.delete(); lowerRed1.delete(); upperRed1.delete(); lowerRed2.delete(); upperRed2.delete(); M_morph.delete(); pipContours.delete(); pipHierarchy.delete();
-                       
-                       return Math.min(pipCount, 12); // max realistic single half in standard set is 12
-                    };
-
                     const topPips = countPips(topHalf);
                     const bottomPips = countPips(bottomHalf);
 
@@ -217,7 +222,12 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
       }
 
       window.cv.imshow(canvas, src);
-      onCardsDetected(detectedCards);
+      
+      const now = Date.now();
+      if (now - lastUpdateRef.current > 250) {
+        onCardsDetected(detectedCards);
+        lastUpdateRef.current = now;
+      }
 
       // Memory cleanup
       src.delete(); gray.delete(); blurred.delete(); edges.delete(); M_dilate.delete(); contours.delete(); hierarchy.delete();
