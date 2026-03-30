@@ -1,7 +1,7 @@
 import React from 'react';
 import { Camera, Download, Play, Square } from 'lucide-react';
 
-const Dashboard = ({ totalScore, cards, isProcessing, isCaptured, toggleProcessing, handleCapture, handleExport }) => {
+const Dashboard = ({ totalScore, cards, isCaptured, handleCapture, handleExport }) => {
   return (
     <div className="w-full max-w-sm flex flex-col gap-6">
       {/* Total Score Card */}
@@ -9,26 +9,19 @@ const Dashboard = ({ totalScore, cards, isProcessing, isCaptured, toggleProcessi
         <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
         <h2 className="text-slate-400 text-sm font-bold uppercase tracking-widest mb-3">Total Score</h2>
         <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-red-500 via-orange-500 to-amber-400 drop-shadow-sm">
-          {totalScore}
+          {isCaptured ? totalScore : '-'}
         </div>
         <p className="text-slate-400 font-medium mt-3 flex items-center gap-2">
-          <span className="bg-slate-700/50 px-2 py-0.5 rounded-md text-white">{cards.length}</span> cards detected
+          {isCaptured ? (
+              <><span className="bg-slate-700/50 px-2 py-0.5 rounded-md text-white">{cards.length}</span> cards detected</>
+          ) : (
+              <span>Point camera and capture to analyze</span>
+          )}
         </p>
       </div>
 
       {/* Controls */}
       <div className="grid grid-cols-2 gap-3">
-        <button
-          onClick={toggleProcessing}
-          className={`flex items-center justify-center gap-2 py-4 px-4 rounded-2xl font-bold transition-all duration-300 shadow-lg ${
-            isProcessing 
-              ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 border border-rose-500/30' 
-              : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'
-          }`}
-        >
-          {isProcessing ? <Square fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} />}
-          {isProcessing ? 'Stop' : 'Start'}
-        </button>
         <button
           onClick={handleCapture}
           className={`flex items-center justify-center gap-2 py-4 px-4 rounded-2xl font-bold transition-all duration-300 shadow-lg hover:shadow-xl ${
@@ -42,7 +35,7 @@ const Dashboard = ({ totalScore, cards, isProcessing, isCaptured, toggleProcessi
         </button>
         <button
           onClick={handleExport}
-          className="col-span-2 flex items-center justify-center gap-2 py-4 px-4 rounded-2xl font-bold bg-slate-800 text-white hover:bg-slate-700 border border-slate-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+          className="flex items-center justify-center gap-2 py-4 px-4 rounded-2xl font-bold bg-slate-800 text-white hover:bg-slate-700 border border-slate-700 transition-all duration-300 shadow-lg hover:shadow-xl"
         >
           <Download size={20} />
           Export JSON
@@ -53,7 +46,9 @@ const Dashboard = ({ totalScore, cards, isProcessing, isCaptured, toggleProcessi
       <div className="bg-slate-800/80 backdrop-blur-xl rounded-[2rem] p-6 border border-slate-700 shadow-2xl flex-1 max-h-[400px] overflow-y-auto custom-scrollbar">
         <h2 className="text-slate-400 text-sm font-bold uppercase tracking-widest mb-5 sticky top-0 bg-slate-800/80 backdrop-blur-xl py-2 z-10">Detected Cards</h2>
         <div className="flex flex-col gap-3">
-          {cards.length === 0 ? (
+          {!isCaptured ? (
+            <div className="text-slate-500 text-sm text-center py-8 font-medium">Waiting for capture...</div>
+          ) : cards.length === 0 ? (
             <div className="text-slate-500 text-sm text-center py-8 font-medium">No cards detected in frame</div>
           ) : (
             cards.map((card, idx) => (

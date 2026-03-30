@@ -8,13 +8,12 @@ function App() {
   const canvasRef = useRef(null);
   const [cards, setCards] = useState([]);
   const [totalScore, setTotalScore] = useState(0);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [isCaptured, setIsCaptured] = useState(false);
 
   useDominoVision({
     videoRef,
     canvasRef,
-    isProcessing,
+    isProcessing: true,
     onCardsDetected: (detectedCards) => {
       setCards(detectedCards);
       let total = 0;
@@ -51,14 +50,6 @@ function App() {
       }
     };
   }, []);
-
-  const toggleProcessing = () => {
-    setIsProcessing(!isProcessing);
-    if (isCaptured && videoRef.current) {
-      videoRef.current.play();
-      setIsCaptured(false);
-    }
-  };
 
   const handleCapture = () => {
     if (videoRef.current) {
@@ -105,9 +96,7 @@ function App() {
           <Dashboard 
             totalScore={totalScore}
             cards={cards}
-            isProcessing={isProcessing}
             isCaptured={isCaptured}
-            toggleProcessing={toggleProcessing}
             handleCapture={handleCapture}
             handleExport={handleExport}
           />

@@ -72,8 +72,8 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
             const pipCnt = pipContours.get(j);
             const pipArea = window.cv.contourArea(pipCnt);
             
-            // Pips on 100x100 matrix usually take between 20 to 500 pixels of area
-            if (pipArea > 15 && pipArea < 1800) {
+            // Pips on 100x100 matrix area. The '1' pip is huge, up to 6000 pixels.
+            if (pipArea > 15 && pipArea < 6000) {
                 const perimeter = window.cv.arcLength(pipCnt, true);
                 if (perimeter > 0) {
                     const circularity = 4 * Math.PI * (pipArea / (perimeter * perimeter));
@@ -278,13 +278,15 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
                  window.cv.line(src, box[j], box[(j + 1) % 4], color, 3, window.cv.LINE_AA, 0);
              }
 
-             const text = `${stableTop}|${stableBottom}`;
-             const minX = Math.min(box[0].x, box[1].x, box[2].x, box[3].x);
-             const minY = Math.min(box[0].y, box[1].y, box[2].y, box[3].y);
-             const textOrg = new window.cv.Point(minX, minY > 25 ? minY - 10 : 25);
-             
-             window.cv.putText(src, text, textOrg, window.cv.FONT_HERSHEY_DUPLEX, 1, new window.cv.Scalar(0, 0, 0, 255), 4, window.cv.LINE_AA);
-             window.cv.putText(src, text, textOrg, window.cv.FONT_HERSHEY_DUPLEX, 1, new window.cv.Scalar(0, 255, 0, 255), 2, window.cv.LINE_AA);
+             if (video.paused) {
+                 const text = `${stableTop}|${stableBottom}`;
+                 const minX = Math.min(box[0].x, box[1].x, box[2].x, box[3].x);
+                 const minY = Math.min(box[0].y, box[1].y, box[2].y, box[3].y);
+                 const textOrg = new window.cv.Point(minX, minY > 25 ? minY - 10 : 25);
+                 
+                 window.cv.putText(src, text, textOrg, window.cv.FONT_HERSHEY_DUPLEX, 1, new window.cv.Scalar(0, 0, 0, 255), 4, window.cv.LINE_AA);
+                 window.cv.putText(src, text, textOrg, window.cv.FONT_HERSHEY_DUPLEX, 1, new window.cv.Scalar(0, 255, 0, 255), 2, window.cv.LINE_AA);
+             }
           }
       });
 
@@ -292,7 +294,9 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
       
       const now = Date.now();
       if (now - lastUpdateRef.current > 250) {
-        onCardsDetected(finalCards);
+        if (video.paused) {
+            onCardsDetected(finalCards);
+        }
         lastUpdateRef.current = now;
       }
 
