@@ -1,7 +1,7 @@
 import React from 'react';
 import { Camera, Download, Play, Square } from 'lucide-react';
 
-const Dashboard = ({ totalScore, cards, isProcessing, toggleProcessing, handleCapture, handleExport }) => {
+const Dashboard = ({ totalScore, cards, isProcessing, isCaptured, toggleProcessing, handleCapture, handleExport }) => {
   return (
     <div className="w-full max-w-sm flex flex-col gap-6">
       {/* Total Score Card */}
@@ -31,10 +31,14 @@ const Dashboard = ({ totalScore, cards, isProcessing, toggleProcessing, handleCa
         </button>
         <button
           onClick={handleCapture}
-          className="flex items-center justify-center gap-2 py-4 px-4 rounded-2xl font-bold bg-slate-800 text-white hover:bg-slate-700 border border-slate-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+          className={`flex items-center justify-center gap-2 py-4 px-4 rounded-2xl font-bold transition-all duration-300 shadow-lg hover:shadow-xl ${
+            isCaptured 
+              ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 border border-amber-500/30' 
+              : 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700'
+          }`}
         >
-          <Camera size={20} />
-          Capture
+          {isCaptured ? <Play fill="currentColor" size={20} /> : <Camera size={20} />}
+          {isCaptured ? 'Resume' : 'Capture'}
         </button>
         <button
           onClick={handleExport}

@@ -13,6 +13,8 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
+    if (video.paused) return;
+    
     // Ensure video is ready
     if (video.readyState !== 4 || video.videoWidth === 0) {
       return;

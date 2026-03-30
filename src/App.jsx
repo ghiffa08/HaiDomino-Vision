@@ -9,6 +9,7 @@ function App() {
   const [cards, setCards] = useState([]);
   const [totalScore, setTotalScore] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCaptured, setIsCaptured] = useState(false);
 
   useDominoVision({
     videoRef,
@@ -53,11 +54,22 @@ function App() {
 
   const toggleProcessing = () => {
     setIsProcessing(!isProcessing);
-    // OpenCV logic will be hooked here
+    if (isCaptured && videoRef.current) {
+      videoRef.current.play();
+      setIsCaptured(false);
+    }
   };
 
   const handleCapture = () => {
-    // Freeze frame logic
+    if (videoRef.current) {
+      if (isCaptured) {
+        videoRef.current.play();
+        setIsCaptured(false);
+      } else {
+        videoRef.current.pause();
+        setIsCaptured(true);
+      }
+    }
   };
 
   const handleExport = () => {
@@ -94,6 +106,7 @@ function App() {
             totalScore={totalScore}
             cards={cards}
             isProcessing={isProcessing}
+            isCaptured={isCaptured}
             toggleProcessing={toggleProcessing}
             handleCapture={handleCapture}
             handleExport={handleExport}
