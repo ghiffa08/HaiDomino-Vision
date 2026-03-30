@@ -65,20 +65,18 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
          const mask2 = new window.cv.Mat();
          const mask = new window.cv.Mat();
 
-         const lowerRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [0, 90, 70, 0]);
-         const upperRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [15, 255, 255, 0]);
+         const lowerRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [0, 50, 40, 0]);
+         const upperRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [20, 255, 255, 0]);
          window.cv.inRange(hsv, lowerRed1, upperRed1, mask1);
 
-         const lowerRed2 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [165, 90, 70, 0]);
+         const lowerRed2 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [160, 50, 40, 0]);
          const upperRed2 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180, 255, 255, 0]);
          window.cv.inRange(hsv, lowerRed2, upperRed2, mask2);
 
          window.cv.bitwise_or(mask1, mask2, mask);
 
-         // Clean up the mask holes
-         const M_morph = window.cv.getStructuringElement(window.cv.MORPH_ELLIPSE, new window.cv.Size(3, 3));
-         window.cv.morphologyEx(mask, mask, window.cv.MORPH_OPEN, M_morph);
-         window.cv.morphologyEx(mask, mask, window.cv.MORPH_CLOSE, M_morph);
+         // Removed morphological close/open to fiercely prevent blurring/merging the closely clustered 6-dots!
+         // Area constraints are enough to deny small noise artifacts.
 
          const pipContours = new window.cv.MatVector();
          const pipHierarchy = new window.cv.Mat();
@@ -106,7 +104,7 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
             pipCnt.delete();
          }
 
-         hsv.delete(); mask1.delete(); mask2.delete(); mask.delete(); lowerRed1.delete(); upperRed1.delete(); lowerRed2.delete(); upperRed2.delete(); M_morph.delete(); pipContours.delete(); pipHierarchy.delete();
+         hsv.delete(); mask1.delete(); mask2.delete(); mask.delete(); lowerRed1.delete(); upperRed1.delete(); lowerRed2.delete(); upperRed2.delete(); pipContours.delete(); pipHierarchy.delete();
          
          return Math.min(pipCount, 12);
       };
