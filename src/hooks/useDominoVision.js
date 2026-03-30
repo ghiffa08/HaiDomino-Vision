@@ -3,11 +3,17 @@ import { useEffect, useRef, useCallback } from 'react';
 export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDetected }) => {
   const requestRef = useRef();
   const lastUpdateRef = useRef(0);
+  const lastFrameTimeRef = useRef(0);
   const activeCardsRef = useRef([]);
   
   const processFrame = useCallback(() => {
-    // Always loop
+    // Always loop native browser render sync
     requestRef.current = requestAnimationFrame(processFrame);
+
+    // Throttle to ~30 FPS to massively save mobile battery and prevent thermal throttling
+    const now = Date.now();
+    if (now - lastFrameTimeRef.current < 30) return;
+    lastFrameTimeRef.current = now;
 
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -19,8 +25,11 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
       return;
     }
 
-    const width = video.videoWidth;
-    const height = video.videoHeight;
+    // Downscale to max 640px to massively prevent mobile WASM crashes and thermal throttling
+    const MAX_WIDTH = 640;
+    const scale = Math.min(1, MAX_WIDTH / video.videoWidth);
+    const width = Math.floor(video.videoWidth * scale);
+    const height = Math.floor(video.videoHeight * scale);
     
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== height) canvas.height = height;
@@ -101,8 +110,8 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
         const cnt = contours.get(i);
         const area = window.cv.contourArea(cnt);
         
-        // Optimize: Domino must be reasonably large compared to frame, relaxed for distance/blur
-        if (area > 2000 && area < (width * height) / 2) {
+        // Optimize: Domino must be reasonably large compared to frame, adjusted for our 640px downscale
+        if (area > 800 && area < (width * height) / 2) {
             // Find minimum area bounding rectangle
             const rotatedRect = window.cv.minAreaRect(cnt);
             const w = rotatedRect.size.width;
@@ -199,8 +208,8 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
       }
 
       // Temporal Smoothing Logic
-      const MAX_HISTORY = 15;
-      const DISTANCE_THRESH = 80;
+      const MAX_HISTORY = 12;
+      const DISTANCE_THRESH = 60; // Slightly smaller because we downscaled coordinates
       const currentActive = activeCardsRef.current;
       const newActive = [];
 
