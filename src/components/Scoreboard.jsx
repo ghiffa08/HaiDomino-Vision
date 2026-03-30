@@ -17,8 +17,8 @@ const Scoreboard = ({ gameState, addPlayer, removePlayer, updateName, resetScore
       {/* Header bar */}
       <header className="flex justify-between items-center p-4 border-b border-white/5">
         <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center font-bold">D</div>
-            <h1 className="font-bold text-lg">Scoreboard</h1>
+            <div className="w-8 h-8 rounded-lg bg-red-600 border border-red-500/50 flex items-center justify-center font-bold shadow-[0_0_15px_rgba(220,38,38,0.5)]">W</div>
+            <h1 className="font-black text-lg tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-amber-500 uppercase">WARVAN DOMINOS</h1>
         </div>
         <div className="flex gap-5 text-slate-400">
            <button onClick={addPlayer} disabled={players.length >= 4} className="hover:text-white disabled:opacity-30"><UserPlus size={22}/></button>

@@ -12,8 +12,8 @@ export default defineConfig({
       injectRegister: 'auto',
       devOptions: { enabled: true },
       manifest: {
-        name: 'Domino Vision',
-        short_name: 'Domino Vision',
+        name: 'WARVAN DOMINOS',
+        short_name: 'WARVAN',
         description: 'AI-powered domino game scoreboard.',
         theme_color: '#121216',
         background_color: '#121216',
