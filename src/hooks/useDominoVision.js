@@ -69,8 +69,8 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
          window.cv.cvtColor(region, grayPip, window.cv.COLOR_RGBA2GRAY, 0);
          
          const mask = new window.cv.Mat();
-         // Adaptive threshold to find dark spots on white face regardless of lighting, glare or shadow
-         window.cv.adaptiveThreshold(grayPip, mask, 255, window.cv.ADAPTIVE_THRESH_MEAN_C, window.cv.THRESH_BINARY_INV, 21, 12);
+         // Adaptive threshold block size 55 accounts for massive "1" dots, separating them from the white background
+         window.cv.adaptiveThreshold(grayPip, mask, 255, window.cv.ADAPTIVE_THRESH_GAUSSIAN_C, window.cv.THRESH_BINARY_INV, 55, 7);
          
          const pipContours = new window.cv.MatVector();
          const pipHierarchy = new window.cv.Mat();
@@ -82,12 +82,12 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
             const pipArea = window.cv.contourArea(pipCnt);
             
             // Pips on 100x100 matrix area. The '1' pip is huge, up to 6000 pixels.
-            if (pipArea > 15 && pipArea < 6000) {
+            if (pipArea > 15 && pipArea < 6500) {
                 const perimeter = window.cv.arcLength(pipCnt, true);
                 if (perimeter > 0) {
                     const circularity = 4 * Math.PI * (pipArea / (perimeter * perimeter));
-                    // Check for general circular shape, dropping weird noise strings
-                    if (circularity > 0.35) {
+                    // Check for general circular shape, relaxed to 0.25 to tolerate extreme motion blur or severe angles
+                    if (circularity > 0.25) {
                         pipCount++;
                     }
                 }
@@ -122,8 +122,8 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
             const rectArea = w * h;
             const fillRatio = rectArea > 0 ? area / rectArea : 0;
             
-            // Requires it to be a solid block (fillRatio > 0.6) to reject scattered wood grain and UI elements
-            if (aspectRatio > 1.2 && aspectRatio < 3.0 && fillRatio > 0.65) {
+            // Requires it to be a solid block to reject scattered wood grain. Relaxed fillRatio to 0.55 for harsh viewing angles.
+            if (aspectRatio > 1.15 && aspectRatio < 3.5 && fillRatio > 0.55) {
                 const box = window.cv.rotatedRectPoints(rotatedRect);
                 
                 // Smooth pip extraction by warping perspective into a constant size.

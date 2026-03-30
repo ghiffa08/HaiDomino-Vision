@@ -1,13 +1,13 @@
 import React from 'react';
 import { RefreshCw, UserPlus, UserMinus, Plus } from 'lucide-react';
 
-const Scoreboard = ({ gameState, addPlayer, removePlayer, updateName, resetScores, onAddScore }) => {
+const Scoreboard = ({ gameState, addPlayer, removePlayer, updateName, resetScores, onAddScore, onAddScoreManual }) => {
   const { players } = gameState;
   
   const cols = players.length === 2 ? 'grid-cols-2' : 'grid-cols-2'; // 3-4 players fit logically in a 2x2 grid
   
   const getThemeColor = (index) => {
-    const colors = ['bg-blue-500', 'bg-red-500', 'bg-emerald-500', 'bg-amber-500'];
+    const colors = ['bg-blue-500 shadow-blue-500/50', 'bg-red-500 shadow-red-500/50', 'bg-emerald-500 shadow-emerald-500/50', 'bg-amber-500 shadow-amber-500/50'];
     const textColors = ['text-blue-500', 'text-red-500', 'text-emerald-500', 'text-amber-500'];
     return { bg: colors[index % colors.length], text: textColors[index % textColors.length] };
   };
@@ -59,14 +59,26 @@ const Scoreboard = ({ gameState, addPlayer, removePlayer, updateName, resetScore
                 ))}
               </div>
 
-              {/* Add Button */}
-              <button  
-                onClick={() => onAddScore(player.id)}
-                className={`w-20 h-20 rounded-full flex items-center justify-center text-white ${theme.bg} hover:brightness-110 active:scale-95 transition-all shadow-xl mt-auto mb-6`}
-                style={{boxShadow: `0 10px 25px -5px ${theme.bg.replace('bg-', '')}`}}
-              >
-                <Plus size={40} />
-              </button>
+              {/* Add Buttons */}
+              <div className="flex flex-col items-center gap-3 mt-auto mb-6">
+                 <button  
+                   onClick={() => onAddScore(player.id)}
+                   className={`w-20 h-20 rounded-full flex items-center justify-center text-white ${theme.bg} hover:brightness-110 active:scale-95 transition-all shadow-xl`}
+                 >
+                   <Plus size={40} />
+                 </button>
+                 <button  
+                   onClick={() => {
+                        const val = window.prompt(`Enter manual score for ${player.name}:`);
+                        if (val !== null && val.trim() !== '' && !isNaN(val)) {
+                            onAddScoreManual(player.id, parseInt(val, 10));
+                        }
+                   }}
+                   className="text-[10px] text-slate-400 font-bold uppercase tracking-widest py-2 px-4 bg-white/5 rounded-full active:bg-white/10"
+                 >
+                   Manual Input
+                 </button>
+              </div>
               
               {/* Score Display */}
               <div className={`text-7xl font-black tracking-tighter ${theme.text}`}>

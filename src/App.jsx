@@ -68,6 +68,9 @@ function App() {
                const player = gameStateHook.gameState.players.find(p => p.id === id);
                setActivePlayerForScan(player);
            }}
+           onAddScoreManual={(id, points) => {
+               gameStateHook.addScore(id, points);
+           }}
         />
       </div>
     </div>
