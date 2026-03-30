@@ -46,9 +46,9 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
       const blurred = new window.cv.Mat();
       window.cv.GaussianBlur(gray, blurred, new window.cv.Size(11, 11), 0, 0, window.cv.BORDER_DEFAULT);
 
-      // Canny edge detection with relaxed thresholds for better handling of lighting and motion blur
+      // Canny edge detection with balanced thresholds to stop wood grain/shadow artifacts
       const edges = new window.cv.Mat();
-      window.cv.Canny(blurred, edges, 30, 100, 3, false);
+      window.cv.Canny(blurred, edges, 40, 110, 3, false);
       
       // Dilate edges to connect broken segment loops
       const M_dilate = window.cv.getStructuringElement(window.cv.MORPH_RECT, new window.cv.Size(3, 3));
@@ -131,8 +131,11 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
             
             // Check aspect ratio of standard dominoes (approx 1:2 or 2:1), relaxed for perspective variance
             let aspectRatio = Math.max(w, h) / Math.min(w, h); // always >= 1
+            const rectArea = w * h;
+            const fillRatio = rectArea > 0 ? area / rectArea : 0;
             
-            if (aspectRatio > 1.2 && aspectRatio < 3.0) {
+            // Requires it to be a solid block (fillRatio > 0.6) to reject scattered wood grain and UI elements
+            if (aspectRatio > 1.2 && aspectRatio < 3.0 && fillRatio > 0.65) {
                 const box = window.cv.rotatedRectPoints(rotatedRect);
                 
                 // Smooth pip extraction by warping perspective into a constant size.
