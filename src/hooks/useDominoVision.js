@@ -3,6 +3,7 @@ import { useEffect, useRef, useCallback } from 'react';
 export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDetected }) => {
   const requestRef = useRef();
   const lastUpdateRef = useRef(0);
+  const activeCardsRef = useRef([]);
   
   const processFrame = useCallback(() => {
     // Always loop
@@ -12,8 +13,6 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
-    if (video.paused) return;
     
     // Ensure video is ready
     if (video.readyState !== 4 || video.videoWidth === 0) {
@@ -117,7 +116,7 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
       const hierarchy = new window.cv.Mat();
       window.cv.findContours(edges, contours, hierarchy, window.cv.RETR_EXTERNAL, window.cv.CHAIN_APPROX_SIMPLE);
       
-      const detectedCards = [];
+      const rawDetections = [];
 
       for (let i = 0; i < contours.size(); ++i) {
         const cnt = contours.get(i);
@@ -136,12 +135,6 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
             if (aspectRatio > 1.2 && aspectRatio < 3.0) {
                 const box = window.cv.rotatedRectPoints(rotatedRect);
                 
-                // Draw rotated bounding box Outline
-                const color = new window.cv.Scalar(0, 255, 0, 255);
-                for (let j = 0; j < 4; j++) {
-                    window.cv.line(src, box[j], box[(j + 1) % 4], color, 3, window.cv.LINE_AA, 0);
-                }
-
                 // Smooth pip extraction by warping perspective into a constant size.
                 // Domino standard upright representation is e.g. 100x200 pixels.
                 const standardW = 100;
@@ -201,17 +194,17 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
                     const bottomPips = countPips(bottomHalf);
 
                     if (topPips + bottomPips <= 24) { // Basic sanity check
-                      detectedCards.push({ top: topPips, bottom: bottomPips });
-
-                      // Display overlaid count on the original camera image
-                      const text = `${topPips}|${bottomPips}`;
                       const minX = Math.min(box[0].x, box[1].x, box[2].x, box[3].x);
+                      const maxX = Math.max(box[0].x, box[1].x, box[2].x, box[3].x);
                       const minY = Math.min(box[0].y, box[1].y, box[2].y, box[3].y);
-                      const textOrg = new window.cv.Point(minX, minY > 25 ? minY - 10 : 25);
+                      const maxY = Math.max(box[0].y, box[1].y, box[2].y, box[3].y);
                       
-                      // Text drop shadow / outline to make it readable in different lightings
-                      window.cv.putText(src, text, textOrg, window.cv.FONT_HERSHEY_DUPLEX, 1, new window.cv.Scalar(0, 0, 0, 255), 4, window.cv.LINE_AA);
-                      window.cv.putText(src, text, textOrg, window.cv.FONT_HERSHEY_DUPLEX, 1, new window.cv.Scalar(0, 255, 0, 255), 2, window.cv.LINE_AA);
+                      rawDetections.push({
+                          box,
+                          topPips,
+                          bottomPips,
+                          center: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 }
+                      });
                     }
 
                     topHalf.delete(); bottomHalf.delete();
@@ -223,11 +216,101 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
         cnt.delete();
       }
 
+      // Temporal Smoothing Logic
+      const MAX_HISTORY = 15;
+      const DISTANCE_THRESH = 80;
+      const currentActive = activeCardsRef.current;
+      const newActive = [];
+
+      rawDetections.forEach(raw => {
+          let closest = null;
+          let minDist = DISTANCE_THRESH;
+          
+          for (const active of currentActive) {
+              const dist = Math.hypot(active.center.x - raw.center.x, active.center.y - raw.center.y);
+              if (dist < minDist) {
+                  minDist = dist;
+                  closest = active;
+              }
+          }
+          
+          if (closest) {
+              closest.center = raw.center;
+              closest.topHistory.push(raw.topPips);
+              closest.bottomHistory.push(raw.bottomPips);
+              if (closest.topHistory.length > MAX_HISTORY) closest.topHistory.shift();
+              if (closest.bottomHistory.length > MAX_HISTORY) closest.bottomHistory.shift();
+              closest.missCount = 0;
+              closest.box = raw.box;
+              newActive.push(closest);
+              currentActive.splice(currentActive.indexOf(closest), 1);
+          } else {
+              newActive.push({
+                  center: raw.center,
+                  topHistory: [raw.topPips],
+                  bottomHistory: [raw.bottomPips],
+                  missCount: 0,
+                  box: raw.box
+              });
+          }
+      });
+      
+      currentActive.forEach(active => {
+          active.missCount++;
+          if (active.missCount < 8) { // Keep alive invisibly for up to 8 frames to stop flicker
+              newActive.push(active);
+          }
+      });
+      
+      activeCardsRef.current = newActive;
+
+      const getMode = (arr) => {
+          const map = {};
+          let maxCount = 0;
+          let mode = arr[0];
+          for(const v of arr) {
+              map[v] = (map[v] || 0) + 1;
+              if (map[v] > maxCount) {
+                  maxCount = map[v];
+                  mode = v;
+              }
+          }
+          return mode;
+      };
+
+      const finalCards = [];
+      newActive.forEach(active => {
+          if (active.missCount < 4) { // Draw on screen if unseen for < 4 frames
+             const stableTop = getMode(active.topHistory);
+             const stableBottom = getMode(active.bottomHistory);
+             
+             if (active.missCount === 0) {
+                 finalCards.push({ top: stableTop, bottom: stableBottom });
+             }
+             
+             const box = active.box;
+             
+             // Draw Rotated bounding box Outline
+             const color = new window.cv.Scalar(0, 255, 0, 255);
+             for (let j = 0; j < 4; j++) {
+                 window.cv.line(src, box[j], box[(j + 1) % 4], color, 3, window.cv.LINE_AA, 0);
+             }
+
+             const text = `${stableTop}|${stableBottom}`;
+             const minX = Math.min(box[0].x, box[1].x, box[2].x, box[3].x);
+             const minY = Math.min(box[0].y, box[1].y, box[2].y, box[3].y);
+             const textOrg = new window.cv.Point(minX, minY > 25 ? minY - 10 : 25);
+             
+             window.cv.putText(src, text, textOrg, window.cv.FONT_HERSHEY_DUPLEX, 1, new window.cv.Scalar(0, 0, 0, 255), 4, window.cv.LINE_AA);
+             window.cv.putText(src, text, textOrg, window.cv.FONT_HERSHEY_DUPLEX, 1, new window.cv.Scalar(0, 255, 0, 255), 2, window.cv.LINE_AA);
+          }
+      });
+
       window.cv.imshow(canvas, src);
       
       const now = Date.now();
       if (now - lastUpdateRef.current > 250) {
-        onCardsDetected(detectedCards);
+        onCardsDetected(finalCards);
         lastUpdateRef.current = now;
       }
 
