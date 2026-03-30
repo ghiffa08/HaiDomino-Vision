@@ -56,56 +56,37 @@ export const useDominoVision = ({ videoRef, canvasRef, isProcessing, onCardsDete
 
       // Define static structure for pip counting outside loop for performance
       const countPips = (region) => {
-         const hsv = new window.cv.Mat();
-         window.cv.cvtColor(region, hsv, window.cv.COLOR_RGBA2RGB);
-         window.cv.cvtColor(hsv, hsv, window.cv.COLOR_RGB2HSV);
-
-         // Look for Red Color Pips (HSV wraparound in OpenCV 0-10 & 165-180)
-         const mask1 = new window.cv.Mat();
-         const mask2 = new window.cv.Mat();
+         const grayPip = new window.cv.Mat();
+         window.cv.cvtColor(region, grayPip, window.cv.COLOR_RGBA2GRAY, 0);
+         
          const mask = new window.cv.Mat();
-
-         const lowerRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [0, 50, 40, 0]);
-         const upperRed1 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [20, 255, 255, 0]);
-         window.cv.inRange(hsv, lowerRed1, upperRed1, mask1);
-
-         const lowerRed2 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [160, 50, 40, 0]);
-         const upperRed2 = new window.cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180, 255, 255, 0]);
-         window.cv.inRange(hsv, lowerRed2, upperRed2, mask2);
-
-         window.cv.bitwise_or(mask1, mask2, mask);
-
-         // Removed morphological close/open to fiercely prevent blurring/merging the closely clustered 6-dots!
-         // Area constraints are enough to deny small noise artifacts.
-
+         // Adaptive threshold to find dark spots on white face regardless of lighting, glare or shadow
+         window.cv.adaptiveThreshold(grayPip, mask, 255, window.cv.ADAPTIVE_THRESH_MEAN_C, window.cv.THRESH_BINARY_INV, 21, 12);
+         
          const pipContours = new window.cv.MatVector();
          const pipHierarchy = new window.cv.Mat();
          window.cv.findContours(mask, pipContours, pipHierarchy, window.cv.RETR_EXTERNAL, window.cv.CHAIN_APPROX_SIMPLE);
 
          let pipCount = 0;
-         
          for (let j = 0; j < pipContours.size(); ++j) {
             const pipCnt = pipContours.get(j);
             const pipArea = window.cv.contourArea(pipCnt);
             
-            // Relax constraints to account for motion blur
-            if (pipArea > 10 && pipArea < 3500) {
+            // Pips on 100x100 matrix usually take between 20 to 500 pixels of area
+            if (pipArea > 15 && pipArea < 1800) {
                 const perimeter = window.cv.arcLength(pipCnt, true);
                 if (perimeter > 0) {
                     const circularity = 4 * Math.PI * (pipArea / (perimeter * perimeter));
-                    if (circularity > 0.3) {
+                    // Check for general circular shape, dropping weird noise strings
+                    if (circularity > 0.35) {
                         pipCount++;
                     }
-                } else {
-                    // Small points might not have significant perimeter but still be valid pip centers
-                    pipCount++;
                 }
             }
             pipCnt.delete();
          }
 
-         hsv.delete(); mask1.delete(); mask2.delete(); mask.delete(); lowerRed1.delete(); upperRed1.delete(); lowerRed2.delete(); upperRed2.delete(); pipContours.delete(); pipHierarchy.delete();
-         
+         grayPip.delete(); mask.delete(); pipContours.delete(); pipHierarchy.delete();
          return Math.min(pipCount, 12);
       };
 
